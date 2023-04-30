@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<stop>
+
+
+	<pre>
+
+		<pt>13</pt>
+		<pu> MINUTES</pu>
+
+
+		<mode>1</mode>		
+		<consist></consist>								
+		<cars></cars>								  
+		<fd> ROUTE 1/HARWOOD</fd>
+		<zone></zone> 
+
+		
+		<scheduled>false</scheduled>
+		<nextbusminutes>0</nextbusminutes>
+		<nextbusonroutetime>5:48 PM</nextbusonroutetime>
+		<v>2101</v>
+		
+
+		<rn>3A</rn>
+		<rd>3A</rd>
+	</pre>
+
+	<pre>
+
+		<pt>28</pt>
+		<pu> MINUTES</pu>
+
+
+		<mode>1</mode>		
+		<consist></consist>								
+		<cars></cars>								  
+		<fd> U.S. 1/BRIGHTPOINT</fd>
+		<zone></zone> 
+
+		
+		<scheduled>false</scheduled>
+		<nextbusminutes>0</nextbusminutes>
+		<nextbusonroutetime>6:06 PM</nextbusonroutetime>
+		<v>2206</v>
+		
+
+		<rn>3B</rn>
+		<rd>3B</rd>
+	</pre>
+
+
+</stop>
