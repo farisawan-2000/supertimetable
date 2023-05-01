@@ -1,32 +1,3 @@
-# *****************************************************************************
-# * | File        :   Pico_ePaper-7.5-B.py
-# * | Author      :   Waveshare team
-# * | Function    :   Electronic paper driver
-# * | Info        :
-# *----------------
-# * | This version:   V1.0
-# * | Date        :   2021-05-27
-# # | Info        :   python demo
-# -----------------------------------------------------------------------------
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documnetation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to  whom the Software is
-# furished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS OR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
-#
-
 from machine import Pin, SPI
 import framebuf
 import utime
@@ -44,7 +15,7 @@ CS_PIN          = 9
 BUSY_PIN        = 13
 
 class EPD_7in5_B:
-    def __init__(self):
+    def __init__(self, Red = True):
         self.reset_pin = Pin(RST_PIN, Pin.OUT)
         
         self.busy_pin = Pin(BUSY_PIN, Pin.IN, Pin.PULL_UP)
@@ -58,9 +29,11 @@ class EPD_7in5_B:
         
 
         self.buffer_black = bytearray(self.height * self.width // 8)
-        self.buffer_red = bytearray(self.height * self.width // 8)
         self.imageblack = framebuf.FrameBuffer(self.buffer_black, self.width, self.height, framebuf.MONO_HLSB)
-        self.imagered = framebuf.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
+
+        if Red:
+            self.buffer_red = bytearray(self.height * self.width // 8)
+            self.imagered = framebuf.FrameBuffer(self.buffer_red, self.width, self.height, framebuf.MONO_HLSB)
         self.init()
 
     def digital_write(self, pin, value):
@@ -238,6 +211,26 @@ class EPD_7in5_B:
             
         self.TurnOnDisplay()
 
+    def displayOnlyBlack(self):
+        
+        high = self.height
+        if( self.width % 8 == 0) :
+            wide =  self.width // 8
+        else :
+            wide =  self.width // 8 + 1
+        
+        # send black data
+        self.send_command(0x10) 
+        for i in range(0, wide):
+            self.send_data1(self.buffer_black[(i * high) : ((i+1) * high)])
+
+        # red start
+        self.send_command(0x13)
+        for i in range(0, wide):
+            self.send_data1([0] * high)
+
+        self.TurnOnDisplay()
+
 
     def sleep(self):
         self.send_command(0x02) # power off
@@ -252,7 +245,6 @@ def px(d):
         return 0x00
 
 def blit_image(fbuffer, img, x, y, w, h):
-    fbuffer.fill_rect(x, y, w, h, 0xFF)
     for i in range(int(w/8)):
         for j in range(h):
             byt = img[j * int(w/8) + i]
@@ -260,7 +252,21 @@ def blit_image(fbuffer, img, x, y, w, h):
                 if ((byt >> k) & 1) == 1:
                     fbuffer.pixel(x + (8 * i) + (8 - k), y + j, 0x00)
 
-#STOPNUM = 3656
+def blit_image_redblack(red, black, img, x, y, w, h):
+    for i in range(int(w/8)):
+        for j in range(h):
+            short1 = img[j * int(w/4) + i]
+            short2 = img[j * int(w/4) + i + 1]
+
+            short = (short1 << 8) | short2
+            for k in range(16)[::2]:
+                xpos = int(((8 * i) + (8 - k)) / 2)
+                if ((short >> k) & 0b_11) & 0b_01:
+                    black.pixel(x + xpos, y + j, 0x00)
+                if ((short >> k) & 0b_11) & 0b_10:
+                    red.pixel(x + xpos, y + j, 0x80)
+
+# STOPNUM = 3656
 STOPNUM = 2999
 DIRECTION = "North Bound"
 
@@ -272,9 +278,9 @@ wlan.active(True)
 wlan.connect(ssid, password)
 while wlan.isconnected() == False:
     print('Waiting for connection...')
-    sleep(1)
+    time.sleep(1)
 
-epd = EPD_7in5_B()
+epd = EPD_7in5_B(Red=False)
 # test
 # connected
 def getArrivalTimes():
@@ -309,13 +315,154 @@ def getArrivalTimes():
         if "<pu>" in line:
             if curMinute.isdigit() == False:
                 curMinute = line.replace("<pu>", " ").replace("</pu>", " ").strip()
+                if curMinute == "APPROACHING":
+                    curMinute = "DUE"
             continue
     return stack
 
 def getTimeAndTemp():
+    tm = 0
+    tmp = 0
     result = requests.get(url="http://new.grtcbustracker.com/bustime/map/getTimeAndTemp.jsp")
 
+    xm = result.text.split("\n")
+    xml = [d for d in xm if len(d) > 1]
+    for line in xml:
+        if "<tm>" in line:
+            tm = line.replace("<tm>", " ").replace("</tm>", " ").strip()
+            continue
+        if "<tp>" in line:
+            tmp = line.replace("<tp>", " ").replace("</tp>", " ").strip().replace("&amp;deg;", " °")
+            continue
+    return tm, tmp
+
 # epd.Clear()
+
+largefont_kerning_table = [
+    # unprintable characters
+    8, 8, 18, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+    8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
+
+    16,
+    13,
+    20,
+    28,
+    30,
+    42,
+    33,
+    10,
+    12,
+    10,
+    21,
+    30,
+    13,
+    20,
+    13,
+    9,
+    29,
+    22,
+    29,
+    29,
+    29,
+    29,
+    29,
+    28,
+    29,
+    29,
+    13,
+    13,
+    21,
+    30,
+    21,
+    28,
+    41,
+    37,
+    36,
+    38,
+    38,
+    33,
+    31,
+    38,
+    36,
+    14,
+    27,
+    39,
+    31,
+    45,
+    36,
+    40,
+    35,
+    40,
+    37,
+    34,
+    32,
+    37,
+    34,
+    49,
+    36,
+    35,
+    34,
+    18,
+    9,
+    15,
+    29,
+    25,
+    10,
+    28,
+    31,
+    30,
+    30,
+    30,
+    18,
+    30,
+    29,
+    12,
+    12,
+    31,
+    12,
+    45,
+    29,
+    31,
+    31,
+    30,
+    22,
+    27,
+    19,
+    29,
+    28,
+    43,
+    29,
+    28,
+    27,
+    15,
+    10,
+    14,
+    29,
+]
+
+
+def fntPrintLarge(paper, x, y, s):
+    # red = paper.imagered
+    black = paper.imageblack
+
+    clut = {}
+    for i in range(128):
+        clut['%c' % i] = i
+    clut['°'] = 2
+
+    start_x = x
+    for i, c in enumerate(s):
+        #print("opening largefont/%d.bin..." % clut[c])
+        glyphb = []
+        with open("/largefont/%d.bin" % clut[c], "rb") as glyph:
+            glyphb = glyph.read()
+        #print(len(glyphb))
+        blit_image(black, glyphb, start_x, y, 64, 64)
+        # Kerning
+        start_x += largefont_kerning_table[clut[c]]
+
+
+
 
 
 # epd.imageblack.text("Waveshare", 5, 10, 0x00)
@@ -340,39 +487,61 @@ def getTimeAndTemp():
 while True:
     begin = time.time()
     try:
+        curTime, curTmp = getTimeAndTemp()
+    except Exception as e:
+        curTime = "00:00"
+        curTmp = "ERR"
+    print(curTime)
+    print(curTmp)
+    try:
         ArrivalStack = getArrivalTimes()
     except Exception as e:
         ArrivalStack = []
 
     # epd.TurnOnDisplay()
     epd.imageblack.fill(0xff)
-    epd.imagered.fill(0x00)
+    # epd.imagered.fill(0x00)
     # image
     fb = []
     with open("img.bin", "rb") as f:
         fb = f.read()
     blit_image(epd.imageblack, fb, 0, 20, 400, 200)
     # Text
-    epd.imageblack.text("Stop #%d" % STOPNUM, 5, 250, 0x00)
-    start_y = 260
+    # epd.imageblack.text("Stop #%d" % STOPNUM, 5, 250, 0x00)
+    start_y = 0
     print(ArrivalStack)
-    for i, x in enumerate(ArrivalStack):
+    TOTALHEIGHT = 120
+    for i, x in enumerate(ArrivalStack[:4]):
         if x[0].isdigit():
-            epd.imageblack.text("Route %s (%s): %s Minutes" % (x[1], x[2], x[0]), 5, start_y + (10*i), 0x00)
-        else: # assume this means the bus is due
-            epd.imageblack.text("Route %s (%s): %s" % (x[1], x[2], x[0][:1].upper() + x[0][1:].lower()), 5, start_y + (10*i), 0x00)
-    epd.imageblack.text("Stop #%d" % STOPNUM, 5, 250, 0x00)
+            # epd.imageblack.text("Route %s (%s): %s Minutes" % (x[1], x[2], x[0]), 5, start_y + (10*i), 0x00)
+            fntPrintLarge(epd, 410, start_y +  0 + (TOTALHEIGHT*i), "Route %s" % (x[1]))
+            # fntPrintLarge(epd, 410, start_y + 30 + (TOTALHEIGHT*i), "(%s)" % (x[2]))
+            epd.imageblack.text("(%s)" % (x[2]), 410, start_y + 48 + (TOTALHEIGHT*i), 0x00)
+            fntPrintLarge(epd, 410, start_y + 60 + (TOTALHEIGHT*i), "  %s Minutes" % (x[0]))
+        else: # assume this means the bus is due OR delayed
+            # epd.imageblack.text("Route %s (%s): %s" % (x[1], x[2], x[0][:1].upper() + x[0][1:].lower()), 5, start_y + (10*i), 0x00)
+            fntPrintLarge(epd, 410, start_y +  0 + (TOTALHEIGHT*i), "Route %s" % (x[1]))
+            epd.imageblack.text("(%s)" % (x[2]), 410, start_y + 48 + (TOTALHEIGHT*i), 0x00)
+            # fntPrintLarge(epd, 410, start_y + 30 + (TOTALHEIGHT*i), "(%s)" % (x[2]))
+            fntPrintLarge(epd, 410, start_y + 60 + (TOTALHEIGHT*i), "  %s" % (x[0]))
+    # epd.imageblack.text("Stop #%d" % STOPNUM, 5, 250, 0x00)
+    fntPrintLarge(epd, 5, 250, "Stop #%d" % STOPNUM)
+    fntPrintLarge(epd, 20, 320, curTime)
+    fntPrintLarge(epd, 20, 380, curTmp)
     if len(ArrivalStack) == 0:
-        epd.imageblack.text("No Arrivals", 5, 260, 0x00)
+        fntPrintLarge(epd, 410, 20, "No Arrivals.")
+        # epd.imageblack.text("No Arrivals", 5, 280, 0x00)
 
-    epd.display()
-    epd.delay_ms(5000)
+    epd.displayOnlyBlack()
 
     end = time.time()
     print("Time Taken: %d" % (end - begin))
     # epd.sleep()
     # D Y N A M I C time
-    time.sleep(60 - (end - begin))
+    if end - begin > 5:
+        time.sleep(60 - (end - begin))
+    else:
+        time.sleep(5)
 
 
 

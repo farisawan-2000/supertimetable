@@ -1,14 +1,14 @@
 #http://new.grtcbustracker.com/bustime/eta/getStopPredictionsETA.jsp
 # agency=
 # route=all
-# &stop=3626
+# &stop=2999
 # import urequests as requests
 import requests
 
 result = requests.get(url="http://new.grtcbustracker.com/bustime/eta/getStopPredictionsETA.jsp"
     + "?agency="
     + "&route=all"
-    + "&stop=3656"
+    + "&stop=2999"
 )
 
 xm = result.text.split("\n")
